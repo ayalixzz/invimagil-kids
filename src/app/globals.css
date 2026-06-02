@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: #0091B3;
+  --color-primary-hover: #00A3C9;
+  --color-heading: #002F6C;
+  --color-text-main: #002F6C;
+  --color-text-secondary: #445E70;
+  --color-border-soft: #A2D0DD;
+  --color-brand-yellow: #FFC800;
+  --color-brand-pink: #D80215;
+  --color-brand-green: #8BC53F;
+  --color-gov-blue: #003189;
+
+  --font-fredoka: var(--font-fredoka), sans-serif;
+  --font-nunito: var(--font-nunito), sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #F6F9FB;
+  --foreground: #002F6C;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-nunito);
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-fredoka);
+}
+
+.glow-yellow {
+  box-shadow: 0 0 15px rgba(255, 200, 0, 0.4);
+}
+
+.glow-primary {
+  box-shadow: 0 0 15px rgba(0, 145, 179, 0.3);
+}
+
+.kid-card-outer {
+  background: rgba(255, 255, 255, 0.72);
+  border: 4px solid #A2D0DD;
+  border-radius: 2rem;
+  padding: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 47, 108, 0.08);
+}
+
+.kid-card-inner {
+  background: #FFFFFF;
+  border-radius: calc(2rem - 0.5rem);
+  padding: 1.5rem;
+  height: 100%;
 }
