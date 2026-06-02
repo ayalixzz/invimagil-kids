@@ -187,7 +187,7 @@ export default function PlayPage() {
   };
 
   // Handle navigation validations
-  const handleNext = async () => {
+  const handleNext = () => {
     if (step === 0) {
       advanceTo(1);
     } else if (step === 1) {
@@ -243,54 +243,96 @@ export default function PlayPage() {
       }
       advanceTo(9);
     } else if (step === 9) {
-      // Start Submit / Evaluation
+      // Start Submit / Evaluation — all client-side
       advanceTo(10);
       setEvaluating(true);
-      
-      try {
-        const res = await fetch("/api/inspector", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            company: { name: companyName, slogan: companySlogan, members: companyMembers, city: companyCity, factoryPlace, logoIcon, logoColor },
-            product: { name: productName, type: productType, eatOrDrink, packaging: packagingType, flavor, derivatives: productDerivatives, riskLevel, storageCondition, shelfLifeDays, allergenWarning, ingredients, recipeSteps },
-            bpmScore: bpmScore
-          })
-        });
-        const data = await res.json();
-        
-        // Wait 3 seconds to show magical evaluation simulation
-        setTimeout(async () => {
-          setEvaluating(false);
-          setIsApproved(data.approved);
-          setEvaluationFeedback(data.feedback);
 
-          if (data.approved) {
-            // Save to PostgreSQL backend
-            const saveRes = await fetch("/api/projects", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                company: { name: companyName, slogan: companySlogan, members: companyMembers, city: companyCity, factoryPlace, logoIcon, logoColor },
-                product: { name: productName, type: productType, eatOrDrink, packaging: packagingType, flavor, derivatives: productDerivatives, riskLevel, storageCondition, shelfLifeDays, allergenWarning, ingredients, recipeSteps },
-                bpmScore: bpmScore,
-                levelReached: getScoreLevel(bpmScore, ingredients.length),
-                score: bpmScore + 50 // base bonus points
-              })
-            });
-            const saveData = await saveRes.json();
-            setRegistrationNumber(saveData.registrationNo);
-            setPoints(bpmScore + 50);
-            setLevelReached(getScoreLevel(bpmScore, ingredients.length));
-          }
-        }, 3000);
+      // ── Client-side inspector logic ──────────────────────────────
+      const BANNED_INGREDIENTS = [
+        "tierra","piedra","roca","arena","plastico","vidrio","juguete","muñeco","papel",
+        "carton","madera","metal","fierro","hierro","tornillo","carbon","basura",
+        "pasto","hojas","cemento","jabon","detergente","quimico","veneno","petroleo",
+        "gasolina","pila","bateria","insecto","araña","bicho","caca","popo","pipi",
+      ];
+      const LIQUIDS_VOCABULARY = [
+        "agua","leche","jugo","zumo","nectar","te","cafe","yogur","yogurt","soda",
+        "gaseosa","limonada","caldo","sopa","aceite","vinagre","almibar",
+      ];
 
-      } catch (error) {
-        console.error("Error evaluating recipe:", error);
-        setEvaluating(false);
-        setIsApproved(false);
-        setEvaluationFeedback(["Hubo un pequeño problema de conexión con el laboratorio. ¡Inténtalo de nuevo!"]);
+      let approved = true;
+      const feedback: string[] = [];
+
+      // Check total percentage
+      const totalPct = ingredients.reduce((s, ing) => s + ing.percentage, 0);
+      if (totalPct !== 100) {
+        approved = false;
+        feedback.push(`InviBot calculó ${totalPct}% en tu receta. Para aprobar, los ingredientes deben sumar exactamente 100%.`);
       }
+
+      // Check ordering
+      let orderedCorrectly = true;
+      for (let i = 0; i < ingredients.length - 1; i++) {
+        if (ingredients[i].percentage < ingredients[i + 1].percentage) {
+          orderedCorrectly = false;
+          break;
+        }
+      }
+      if (!orderedCorrectly) {
+        approved = false;
+        feedback.push("InviBot detectó que la lista de ingredientes no está ordenada de mayor a menor porcentaje.");
+      }
+
+      // Check banned ingredients
+      const foundBanned: string[] = [];
+      ingredients.forEach((ing) => {
+        const ingName = ing.name.toLowerCase();
+        BANNED_INGREDIENTS.forEach((banned) => {
+          if (ingName.includes(banned)) foundBanned.push(ing.name);
+        });
+      });
+      if (foundBanned.length > 0) {
+        approved = false;
+        feedback.push(`InviBot encontró ingredientes que no son comida: ${foundBanned.join(", ")}. Cámbialos por alimentos reales y seguros.`);
+      }
+
+      // Liquid product must have a liquid ingredient
+      if (productType === "liquido") {
+        let hasLiquid = false;
+        ingredients.forEach((ing) => {
+          const ingName = ing.name.toLowerCase();
+          LIQUIDS_VOCABULARY.forEach((liq) => {
+            if (ingName.includes(liq)) hasLiquid = true;
+          });
+        });
+        if (!hasLiquid) {
+          approved = false;
+          feedback.push("InviBot ve que tu producto es líquido, pero la receta no incluye agua, leche, jugo u otro ingrediente líquido.");
+        }
+      }
+
+      // BPM score check
+      if (bpmScore < 100) {
+        approved = false;
+        feedback.push("InviBot todavía necesita que completes todas las reglas de higiene BPM antes de aprobar el registro.");
+      }
+
+      if (approved) {
+        feedback.push(`InviBot aprobó tu producto "${productName}". La receta suma 100%, está ordenada y cumple las reglas de higiene.`);
+      }
+
+      // Simulate 3-second "lab analysis" animation
+      setTimeout(() => {
+        setEvaluating(false);
+        setIsApproved(approved);
+        setEvaluationFeedback(feedback);
+
+        if (approved) {
+          const regNo = `RSM-${new Date().getFullYear()}-KIDS-${String(Math.floor(1000 + Math.random() * 9000))}`;
+          setRegistrationNumber(regNo);
+          setPoints(bpmScore + 50);
+          setLevelReached(getScoreLevel(bpmScore, ingredients.length));
+        }
+      }, 3000);
     } else if (step === 10) {
       if (isApproved) {
         advanceTo(11);
