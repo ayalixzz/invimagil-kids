@@ -10,6 +10,7 @@ import BpmChecklist from "@/components/BpmChecklist";
 import DossierFolder from "@/components/DossierFolder";
 import CertificateDownload from "@/components/CertificateDownload";
 import InvimagilKidsLogo from "@/components/InvimagilKidsLogo";
+import Confetti from "@/components/Confetti";
 
 const FINAL_STEP = 12;
 
@@ -167,6 +168,7 @@ export default function PlayPage() {
   const [evaluationFeedback, setEvaluationFeedback] = useState<string[]>([]);
   const [isApproved, setIsApproved] = useState(false);
   const [notice, setNotice] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Final Results
   const [registrationNumber, setRegistrationNumber] = useState("RSM-2026-KIDS-0001");
@@ -246,6 +248,7 @@ export default function PlayPage() {
       // Start Submit / Evaluation — all client-side
       advanceTo(10);
       setEvaluating(true);
+      setShowConfetti(false);
 
       // ── Client-side inspector logic ──────────────────────────────
       const BANNED_INGREDIENTS = [
@@ -262,14 +265,14 @@ export default function PlayPage() {
       let approved = true;
       const feedback: string[] = [];
 
-      // Check total percentage
+      // 1. Check total percentage
       const totalPct = ingredients.reduce((s, ing) => s + ing.percentage, 0);
       if (totalPct !== 100) {
         approved = false;
-        feedback.push(`InviBot calculó ${totalPct}% en tu receta. Para aprobar, los ingredientes deben sumar exactamente 100%.`);
+        feedback.push(`⚗️ InviBot calculó ${totalPct}% en tu receta. Para aprobar, los ingredientes deben sumar exactamente 100%. (Fase 3)`);
       }
 
-      // Check ordering
+      // 2. Check ordering
       let orderedCorrectly = true;
       for (let i = 0; i < ingredients.length - 1; i++) {
         if (ingredients[i].percentage < ingredients[i + 1].percentage) {
@@ -279,10 +282,16 @@ export default function PlayPage() {
       }
       if (!orderedCorrectly) {
         approved = false;
-        feedback.push("InviBot detectó que la lista de ingredientes no está ordenada de mayor a menor porcentaje.");
+        feedback.push("📋 InviBot detectó que la lista de ingredientes no está ordenada de mayor a menor porcentaje. (Fase 3)");
       }
 
-      // Check banned ingredients
+      // 3. Minimum ingredients
+      if (ingredients.length < 2) {
+        approved = false;
+        feedback.push("🧪 InviBot necesita al menos 2 ingredientes en tu receta para que sea válida. (Fase 3)");
+      }
+
+      // 4. Check banned ingredients
       const foundBanned: string[] = [];
       ingredients.forEach((ing) => {
         const ingName = ing.name.toLowerCase();
@@ -292,10 +301,10 @@ export default function PlayPage() {
       });
       if (foundBanned.length > 0) {
         approved = false;
-        feedback.push(`InviBot encontró ingredientes que no son comida: ${foundBanned.join(", ")}. Cámbialos por alimentos reales y seguros.`);
+        feedback.push(`🚫 InviBot encontró ingredientes que no son comida: ${foundBanned.join(", ")}. Cámbialos por alimentos reales y seguros. (Fase 3)`);
       }
 
-      // Liquid product must have a liquid ingredient
+      // 5. Liquid product must have a liquid ingredient
       if (productType === "liquido") {
         let hasLiquid = false;
         ingredients.forEach((ing) => {
@@ -306,18 +315,52 @@ export default function PlayPage() {
         });
         if (!hasLiquid) {
           approved = false;
-          feedback.push("InviBot ve que tu producto es líquido, pero la receta no incluye agua, leche, jugo u otro ingrediente líquido.");
+          feedback.push("💧 InviBot ve que tu producto es líquido, pero la receta no incluye agua, leche, jugo u otro ingrediente líquido. (Fase 3)");
         }
       }
 
-      // BPM score check
-      if (bpmScore < 100) {
+      // 6. Minimum recipe steps
+      if (recipeSteps.length < 2) {
         approved = false;
-        feedback.push("InviBot todavía necesita que completes todas las reglas de higiene BPM antes de aprobar el registro.");
+        feedback.push("👨‍🍳 InviBot necesita al menos 2 pasos de preparación para validar la receta. (Fase 4)");
       }
 
+      // 7. Organoleptic checks
+      if (!sensoryFlavor.trim() || !sensorySmell.trim() || !sensoryColor.trim() || !sensoryTexture.trim()) {
+        approved = false;
+        feedback.push("👃 InviBot necesita que completes todos los campos del análisis organoléptico: sabor, olor, color y textura. (Fase 5)");
+      }
+
+      // 8. Shelf life check
+      if (!shelfLifeDays.trim()) {
+        approved = false;
+        feedback.push("📅 InviBot necesita saber cuántos días dura tu producto (vida útil). (Fase 6)");
+      }
+
+      // 9. BPM score check
+      if (bpmScore < 100) {
+        approved = false;
+        feedback.push("🧼 InviBot todavía necesita que completes todas las reglas de higiene BPM antes de aprobar el registro. (Fase 7)");
+      }
+
+      // 10. Label check
+      if (labelCheckedIds.length < 8) {
+        approved = false;
+        feedback.push(`🏷️ InviBot necesita que marques los ${8 - labelCheckedIds.length} datos faltantes de la etiqueta obligatoria. (Fase 8)`);
+      }
+
+      // Calculate detailed score
+      let calculatedPoints = 0;
+      calculatedPoints += bpmScore;                           // max 100
+      calculatedPoints += Math.min(ingredients.length * 5, 30); // max 30
+      calculatedPoints += recipeSteps.length >= 3 ? 20 : recipeSteps.length * 7; // max 20
+      calculatedPoints += labelCheckedIds.length >= 8 ? 20 : 0; // 20
+      calculatedPoints += (sensoryFlavor && sensorySmell && sensoryColor && sensoryTexture) ? 15 : 0; // 15
+      calculatedPoints += shelfLifeDays.trim() ? 10 : 0;      // 10
+      calculatedPoints += allergenWarning.trim() ? 5 : 0;     // 5
+
       if (approved) {
-        feedback.push(`InviBot aprobó tu producto "${productName}". La receta suma 100%, está ordenada y cumple las reglas de higiene.`);
+        feedback.push(`🎉 ¡InviBot aprobó tu producto "${productName}"! La receta suma 100%, está ordenada, cumple las reglas de higiene y la documentación está completa.`);
       }
 
       // Simulate 3-second "lab analysis" animation
@@ -329,26 +372,32 @@ export default function PlayPage() {
         if (approved) {
           const regNo = `RSM-${new Date().getFullYear()}-KIDS-${String(Math.floor(1000 + Math.random() * 9000))}`;
           setRegistrationNumber(regNo);
-          setPoints(bpmScore + 50);
-          setLevelReached(getScoreLevel(bpmScore, ingredients.length));
+          setPoints(calculatedPoints);
+          setLevelReached(getScoreLevel(calculatedPoints, ingredients.length));
+          setShowConfetti(true);
+          // Auto-hide confetti after 6 seconds
+          setTimeout(() => setShowConfetti(false), 6000);
         }
       }, 3000);
     } else if (step === 10) {
       if (isApproved) {
         advanceTo(11);
       } else {
-        // Go back to the step that needs correction
-        // If BPM not checked, go to step 5. If ingredients out of order, go to step 3.
-        let outOfOrder = false;
-        for (let i = 0; i < ingredients.length - 1; i++) {
-          if (ingredients[i].percentage < ingredients[i + 1].percentage) outOfOrder = true;
-        }
-        const totalPct = ingredients.reduce((s, ing) => s + ing.percentage, 0);
+        // Navigate to the first step that needs correction based on feedback
+        const fbText = evaluationFeedback.join(" ");
 
-        if (totalPct !== 100 || outOfOrder) {
+        if (fbText.includes("Fase 3")) {
           advanceTo(3);
-        } else if (bpmScore < 100) {
+        } else if (fbText.includes("Fase 4")) {
+          advanceTo(4);
+        } else if (fbText.includes("Fase 5")) {
+          advanceTo(5);
+        } else if (fbText.includes("Fase 6")) {
+          advanceTo(6);
+        } else if (fbText.includes("Fase 7")) {
           advanceTo(7);
+        } else if (fbText.includes("Fase 8")) {
+          advanceTo(8);
         } else {
           advanceTo(1); // default fallback
         }
@@ -362,11 +411,13 @@ export default function PlayPage() {
     if (step > 0) advanceTo(step - 1);
   };
 
-  const getScoreLevel = (bpm: number, ingCount: number) => {
-    const total = bpm + (ingCount * 10);
-    if (total >= 140) return "Súper Chef de Calidad";
-    if (total >= 100) return "Emprendedor Estrella Estrella";
-    return "Mini Creador de Alimentos";
+  const getScoreLevel = (totalScore: number, ingCount: number) => {
+    const adjusted = totalScore + (ingCount * 2);
+    if (adjusted >= 180) return "Maestro Inspector de Calidad";
+    if (adjusted >= 150) return "Súper Chef de Calidad";
+    if (adjusted >= 120) return "Emprendedor Estrella";
+    if (adjusted >= 80) return "Creador de Alimentos";
+    return "Mini Emprendedor";
   };
 
   const addRecipeStep = (e: React.FormEvent) => {
@@ -410,10 +461,12 @@ export default function PlayPage() {
     setBpmCheckedIds([]);
     setIsApproved(false);
     setNotice("");
+    setShowConfetti(false);
   };
 
   return (
     <div className="flex-1 flex flex-col w-full min-h-screen">
+      {showConfetti && <Confetti count={60} />}
       <header className="w-full bg-white border-b-2 border-border-soft py-4 px-4 shadow-xs select-none print:hidden">
         <div className="max-w-5xl mx-auto w-full flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -1072,13 +1125,35 @@ export default function PlayPage() {
                     </>
                   ) : (
                     <>
-                      <span className="text-6xl">{isApproved ? "" : "Advertencia:"}</span>
+                      {isApproved ? (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", stiffness: 200 }}
+                          className="text-6xl"
+                        >
+                          🏆
+                        </motion.div>
+                      ) : (
+                        <span className="text-5xl">📋</span>
+                      )}
                       <h4 className="text-3xl font-black text-heading">
                         {isApproved ? "¡APROBADO POR INVIMÁGIL KIDS!" : "Observaciones de InviBot"}
                       </h4>
-                      <div className="bg-[#F6F9FB] p-5 rounded-3xl border border-gray-100 max-w-lg text-left space-y-2">
+                      {isApproved && (
+                        <p className="text-sm font-bold text-brand-green max-w-sm">
+                          Tu producto cumplió con todos los requisitos sanitarios y de calidad.
+                        </p>
+                      )}
+                      <div className={`p-5 rounded-3xl border max-w-lg text-left space-y-2 ${
+                        isApproved 
+                          ? "bg-brand-green/5 border-brand-green/20" 
+                          : "bg-[#F6F9FB] border-gray-100"
+                      }`}>
                         {evaluationFeedback.map((fb, idx) => (
-                          <p key={idx} className="text-sm font-bold text-text-secondary leading-relaxed">
+                          <p key={idx} className={`text-sm font-bold leading-relaxed ${
+                            isApproved ? "text-heading" : "text-text-secondary"
+                          }`}>
                             {fb}
                           </p>
                         ))}
@@ -1111,6 +1186,9 @@ export default function PlayPage() {
                   level={levelReached}
                   riskLevel={riskLevel}
                   shelfLifeDays={shelfLifeDays}
+                  city={companyCity}
+                  packaging={packagingType}
+                  medalsEarned={medalsEarned}
                 />
               </div>
             )}
