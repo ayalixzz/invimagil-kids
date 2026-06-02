@@ -1159,7 +1159,17 @@ export default function PlayPage() {
                         ))}
                       </div>
 
-                      {!isApproved && (
+                      {isApproved ? (
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={handleNext}
+                          className="bg-brand-green hover:bg-brand-green/90 text-white font-black px-8 py-3.5 rounded-full shadow-md cursor-pointer flex items-center gap-2"
+                        >
+                          <span>Ver mi Certificado Mágico</span>
+                          <ArrowRight className="w-4 h-4 stroke-[3]" />
+                        </motion.button>
+                      ) : (
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
@@ -1271,16 +1281,27 @@ export default function PlayPage() {
         </footer>
       )}
 
-      {/* Quick correction step 10 button */}
-      {step === 10 && !evaluating && !isApproved && (
+      {/* Step 10 footer navigation */}
+      {step === 10 && !evaluating && (
         <footer className="mt-8 flex justify-center print:hidden">
-          <button
-            type="button"
-            onClick={handleNext}
-            className="bg-brand-pink hover:bg-opacity-95 text-white font-black px-10 py-4 rounded-full shadow-md cursor-pointer"
-          >
-            <span>Corregir mi proyecto</span>
-          </button>
+          {isApproved ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="flex items-center gap-2 bg-brand-green hover:bg-brand-green/90 text-white font-black px-10 py-4 rounded-full cursor-pointer shadow-md hover:shadow-lg transition-all text-lg"
+            >
+              <span>Ver mi Certificado Mágico</span>
+              <ArrowRight className="w-5 h-5 stroke-[3]" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="bg-brand-pink hover:bg-opacity-95 text-white font-black px-10 py-4 rounded-full shadow-md cursor-pointer"
+            >
+              <span>Corregir mi proyecto</span>
+            </button>
+          )}
         </footer>
       )}
 
