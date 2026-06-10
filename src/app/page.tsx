@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Award, ArrowLeft, ArrowRight, RefreshCw, ChefHat, Shield, Building2, ClipboardCheck, CookingPot } from "lucide-react";
 import CharacterBubble from "@/components/CharacterBubble";
 import LogoCreator from "@/components/LogoCreator";
-import RecipeBuilder, { Ingredient } from "@/components/RecipeBuilder";
+import RecipeBuilder, { Ingredient, getUtensilById } from "@/components/RecipeBuilder";
+import MeasurementChatBot from "@/components/MeasurementChatBot";
 import BpmChecklist from "@/components/BpmChecklist";
 import DossierFolder from "@/components/DossierFolder";
 import CertificateDownload from "@/components/CertificateDownload";
@@ -50,7 +51,7 @@ const getInspectorGuide = (
   }
   if (step === 3) {
     return {
-      message: "Llegamos a la cocina. Escribe los ingredientes con porcentaje y ordenalos de mayor a menor.",
+      message: "¡Llegamos a la cocina! Mide tus ingredientes con utensilios: cucharitas, cucharas, pocillos y tazas. Ordénalos del que más pesa al que menos pesa. Si tienes dudas, pregúntale al InviBot Medidor.",
       expression: "thinking",
     };
   }
@@ -213,8 +214,12 @@ export default function PlayPage() {
         showNotice("Agrega al menos un ingrediente a tu receta.");
         return;
       }
+      if (ingredients.length < 2) {
+        showNotice("Necesitas al menos 2 ingredientes para tu receta.");
+        return;
+      }
       if (!ingredientsValid) {
-        showNotice("La receta debe sumar exactamente 100% y estar ordenada de mayor a menor.");
+        showNotice("Los ingredientes deben estar ordenados de mayor a menor peso. Usa las flechas para organizarlos.");
         return;
       }
       advanceTo(4);
@@ -265,33 +270,26 @@ export default function PlayPage() {
       let approved = true;
       const feedback: string[] = [];
 
-      // 1. Check total percentage
-      const totalPct = ingredients.reduce((s, ing) => s + ing.percentage, 0);
-      if (totalPct !== 100) {
-        approved = false;
-        feedback.push(`⚗️ InviBot calculó ${totalPct}% en tu receta. Para aprobar, los ingredientes deben sumar exactamente 100%. (Fase 3)`);
-      }
-
-      // 2. Check ordering
+      // 1. Check ordering by total weight
       let orderedCorrectly = true;
       for (let i = 0; i < ingredients.length - 1; i++) {
-        if (ingredients[i].percentage < ingredients[i + 1].percentage) {
+        if (ingredients[i].totalGrams < ingredients[i + 1].totalGrams) {
           orderedCorrectly = false;
           break;
         }
       }
       if (!orderedCorrectly) {
         approved = false;
-        feedback.push("📋 InviBot detectó que la lista de ingredientes no está ordenada de mayor a menor porcentaje. (Fase 3)");
+        feedback.push("📋 InviBot detectó que los ingredientes no están ordenados de mayor a menor peso. Usa las flechas para organizarlos. (Fase 3)");
       }
 
-      // 3. Minimum ingredients
+      // 2. Minimum ingredients
       if (ingredients.length < 2) {
         approved = false;
         feedback.push("🧪 InviBot necesita al menos 2 ingredientes en tu receta para que sea válida. (Fase 3)");
       }
 
-      // 4. Check banned ingredients
+      // 3. Check banned ingredients
       const foundBanned: string[] = [];
       ingredients.forEach((ing) => {
         const ingName = ing.name.toLowerCase();
@@ -304,7 +302,7 @@ export default function PlayPage() {
         feedback.push(`🚫 InviBot encontró ingredientes que no son comida: ${foundBanned.join(", ")}. Cámbialos por alimentos reales y seguros. (Fase 3)`);
       }
 
-      // 5. Liquid product must have a liquid ingredient
+      // 4. Liquid product must have a liquid ingredient
       if (productType === "liquido") {
         let hasLiquid = false;
         ingredients.forEach((ing) => {
@@ -360,7 +358,8 @@ export default function PlayPage() {
       calculatedPoints += allergenWarning.trim() ? 5 : 0;     // 5
 
       if (approved) {
-        feedback.push(`🎉 ¡InviBot aprobó tu producto "${productName}"! La receta suma 100%, está ordenada, cumple las reglas de higiene y la documentación está completa.`);
+        const totalWeight = ingredients.reduce((s, i) => s + i.totalGrams, 0);
+        feedback.push(`🎉 ¡InviBot aprobó tu producto "${productName}"! La receta pesa ${totalWeight}g en total, los ingredientes están bien ordenados, cumple las reglas de higiene y la documentación está completa.`);
       }
 
       // Simulate 3-second "lab analysis" animation
@@ -840,18 +839,24 @@ export default function PlayPage() {
 
             {/* STEP 3: Ingredients Formulation */}
             {step === 3 && (
-              <div className="kid-card-outer">
-                <div className="kid-card-inner space-y-4">
-                  <h3 className="text-2xl font-black text-heading border-b-4 border-dashed border-border-soft pb-2">
-                    Fase 3: La Receta Secreta
-                  </h3>
-                  <RecipeBuilder
-                    ingredients={ingredients}
-                    onChangeIngredients={setIngredients}
-                    onValidationChange={setIngredientsValid}
-                  />
+              <>
+                <div className="kid-card-outer">
+                  <div className="kid-card-inner space-y-4">
+                    <h3 className="text-2xl font-black text-heading border-b-4 border-dashed border-border-soft pb-2">
+                      Fase 3: La Receta Secreta 🍳
+                    </h3>
+                    <p className="text-sm font-bold text-text-secondary">
+                      Mide tus ingredientes con utensilios de cocina. Si no sabes cuántos gramos tiene cada uno, pregúntale al <span className="text-primary font-black">InviBot Medidor</span> (botón abajo a la derecha).
+                    </p>
+                    <RecipeBuilder
+                      ingredients={ingredients}
+                      onChangeIngredients={setIngredients}
+                      onValidationChange={setIngredientsValid}
+                    />
+                  </div>
                 </div>
-              </div>
+                <MeasurementChatBot />
+              </>
             )}
 
             {/* STEP 4: Cooking instructions */}
@@ -1268,7 +1273,7 @@ export default function PlayPage() {
             <span>{
               step === 1 ? "¡Guardar Empresa!" :
               step === 2 ? "¡Guardar Producto!" :
-              step === 3 ? "¡Guardar Receta!" :
+              step === 3 ? "¡Guardar Ingredientes!" :
               step === 4 ? "¡Guardar Cocina!" :
               step === 5 ? "¡Guardar Sentidos!" :
               step === 6 ? "¡Guardar Almacenamiento!" :

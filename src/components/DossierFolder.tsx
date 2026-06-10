@@ -12,7 +12,7 @@ import {
   PackageCheck,
   type LucideIcon,
 } from "lucide-react";
-import { Ingredient } from "./RecipeBuilder";
+import { Ingredient, getUtensilById } from "./RecipeBuilder";
 
 interface DossierFolderProps {
   company: {
@@ -134,16 +134,19 @@ export default function DossierFolder({
         </div>
 
         <section className="bg-primary/5 p-4 rounded-3xl border border-primary/15 space-y-3">
-          <h5 className="text-base font-black text-heading">Ingredientes de mayor a menor proporcion:</h5>
+          <h5 className="text-base font-black text-heading">Ingredientes de mayor a menor peso:</h5>
           <div className="flex flex-wrap gap-2">
-            {product.ingredients.map((ing, idx) => (
-              <span
-                key={ing.id}
-                className="bg-white border border-border-soft px-3 py-1.5 rounded-2xl text-xs font-black text-heading shadow-xs"
-              >
-                {idx + 1}. {ing.name} ({ing.percentage}%)
-              </span>
-            ))}
+            {product.ingredients.map((ing, idx) => {
+              const u = getUtensilById(ing.utensil);
+              return (
+                <span
+                  key={ing.id}
+                  className="bg-white border border-border-soft px-3 py-1.5 rounded-2xl text-xs font-black text-heading shadow-xs"
+                >
+                  {idx + 1}. {ing.name} — {u.emoji} {ing.quantity} {u.label} ({ing.totalGrams}g / {ing.percentage}%)
+                </span>
+              );
+            })}
           </div>
         </section>
 

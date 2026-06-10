@@ -1,130 +1,177 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, ArrowUp, ArrowDown, Sparkles } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Scale } from "lucide-react";
 
+/* ── Utensil definitions ─────────────────────────────────── */
+export interface Utensil {
+  id: string;
+  label: string;
+  emoji: string;
+  grams: number;
+  description: string;
+}
+
+export const UTENSILS: Utensil[] = [
+  { id: "pizca",    label: "Pizca",           emoji: "✨",  grams: 1,   description: "Un pellizquito con los dedos" },
+  { id: "cucharita",label: "Cucharita",       emoji: "🥄",  grams: 5,   description: "Cuchara pequeña de postre" },
+  { id: "cuchara",  label: "Cuchara grande",  emoji: "🥣",  grams: 15,  description: "Cuchara sopera grande" },
+  { id: "pocillo",  label: "Pocillo / Tacita",emoji: "☕",  grams: 60,  description: "Taza chiquita de tinto" },
+  { id: "jicara",   label: "Jícara / Chácara",emoji: "🍵",  grams: 120, description: "Tazón mediano" },
+  { id: "taza",     label: "Taza",            emoji: "🫙",  grams: 240, description: "Taza grande estándar" },
+];
+
+export const getUtensilById = (id: string): Utensil =>
+  UTENSILS.find((u) => u.id === id) || UTENSILS[1];
+
+/* ── Ingredient type ─────────────────────────────────────── */
 export interface Ingredient {
   id: string;
   name: string;
+  quantity: number;
+  utensil: string;      // utensil id
+  /** Auto-calculated: quantity × utensil grams */
+  totalGrams: number;
+  /** Auto-calculated percentage of total recipe weight */
   percentage: number;
 }
 
+/* ── Props ───────────────────────────────────────────────── */
 interface RecipeBuilderProps {
   ingredients: Ingredient[];
   onChangeIngredients: (newIngredients: Ingredient[]) => void;
   onValidationChange: (isValid: boolean) => void;
 }
 
+/* ── Helpers ─────────────────────────────────────────────── */
+const recalcPercentages = (list: Ingredient[]): Ingredient[] => {
+  const totalWeight = list.reduce((s, i) => s + i.totalGrams, 0);
+  if (totalWeight === 0) return list;
+  return list.map((ing) => ({
+    ...ing,
+    percentage: Math.round((ing.totalGrams / totalWeight) * 100),
+  }));
+};
+
+/* ── Component ───────────────────────────────────────────── */
 export default function RecipeBuilder({
   ingredients,
   onChangeIngredients,
   onValidationChange,
 }: RecipeBuilderProps) {
   const [name, setName] = useState("");
-  const [percentage, setPercentage] = useState(25);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedUtensil, setSelectedUtensil] = useState("cuchara");
 
-  // Add ingredient
+  /* ── Add ──────────────────────────────────────────────── */
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    const u = getUtensilById(selectedUtensil);
+    const totalGrams = quantity * u.grams;
     const newIng: Ingredient = {
       id: crypto.randomUUID(),
       name: name.trim(),
-      percentage: Number(percentage),
+      quantity,
+      utensil: selectedUtensil,
+      totalGrams,
+      percentage: 0,
     };
-    const updated = [...ingredients, newIng];
+    const updated = recalcPercentages([...ingredients, newIng]);
     onChangeIngredients(updated);
     setName("");
-    // Check validation on next step
-    validateOrder(updated);
+    setQuantity(1);
+    validate(updated);
   };
 
-  // Remove ingredient
+  /* ── Remove ──────────────────────────────────────────── */
   const handleRemove = (id: string) => {
-    const updated = ingredients.filter((ing) => ing.id !== id);
+    const updated = recalcPercentages(ingredients.filter((i) => i.id !== id));
     onChangeIngredients(updated);
-    validateOrder(updated);
+    validate(updated);
   };
 
-  // Move ingredient up/down
-  const moveIngredient = (index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= ingredients.length) return;
-
+  /* ── Move ────────────────────────────────────────────── */
+  const moveIngredient = (index: number, dir: "up" | "down") => {
+    const t = dir === "up" ? index - 1 : index + 1;
+    if (t < 0 || t >= ingredients.length) return;
     const updated = [...ingredients];
-    const temp = updated[index];
-    updated[index] = updated[targetIndex];
-    updated[targetIndex] = temp;
-
+    [updated[index], updated[t]] = [updated[t], updated[index]];
     onChangeIngredients(updated);
-    validateOrder(updated);
+    validate(updated);
   };
 
-  // Validate that ingredients are ordered from highest to lowest
-  const validateOrder = (list: Ingredient[]) => {
+  /* ── Validate ────────────────────────────────────────── */
+  const validate = (list: Ingredient[]) => {
     if (list.length < 2) {
       onValidationChange(list.length > 0);
       return;
     }
-    let valid = true;
+    let ordered = true;
     for (let i = 0; i < list.length - 1; i++) {
-      if (list[i].percentage < list[i + 1].percentage) {
-        valid = false;
+      if (list[i].totalGrams < list[i + 1].totalGrams) {
+        ordered = false;
         break;
       }
     }
-    const totalPercentage = list.reduce((sum, ing) => sum + ing.percentage, 0);
-    onValidationChange(valid && totalPercentage === 100);
+    onValidationChange(ordered);
   };
 
-  // Check order status of a specific index
-  const isIndexOutOfOrder = (index: number) => {
-    if (index === 0) return false;
-    return ingredients[index].percentage > ingredients[index - 1].percentage;
-  };
+  const isOutOfOrder = (idx: number) =>
+    idx > 0 && ingredients[idx].totalGrams > ingredients[idx - 1].totalGrams;
 
-  const totalSum = ingredients.reduce((sum, ing) => sum + ing.percentage, 0);
-  
-  // Magical balance tool (redistributes percentages to sum 100% proportionally)
-  const handleMagicalAdjust = () => {
-    if (ingredients.length === 0) return;
-    const currentSum = totalSum === 0 ? 1 : totalSum;
-    const adjusted = ingredients.map((ing) => ({
-      ...ing,
-      percentage: Math.round((ing.percentage / currentSum) * 100),
-    }));
-    
-    // Adjust rounding difference
-    const newSum = adjusted.reduce((sum, ing) => sum + ing.percentage, 0);
-    if (newSum !== 100 && adjusted.length > 0) {
-      adjusted[0].percentage += (100 - newSum);
-    }
-
-    onChangeIngredients(adjusted);
-    validateOrder(adjusted);
-  };
-
-  // Check if order is fully correct (excluding sum)
   const isOrderCorrect = () => {
     if (ingredients.length < 2) return true;
     for (let i = 0; i < ingredients.length - 1; i++) {
-      if (ingredients[i].percentage < ingredients[i + 1].percentage) return false;
+      if (ingredients[i].totalGrams < ingredients[i + 1].totalGrams) return false;
     }
     return true;
   };
 
+  const totalWeight = ingredients.reduce((s, i) => s + i.totalGrams, 0);
+  const currentUtensil = getUtensilById(selectedUtensil);
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-        <h5 className="text-xl font-bold text-heading mb-4 flex items-center gap-2">
+        <h5 className="text-xl font-bold text-heading mb-1 flex items-center gap-2">
           <span>Añade los ingredientes:</span>
-          <span className="text-xs text-text-secondary font-medium bg-gray-100 px-3 py-1 rounded-full">
-            Suma actual: {totalSum}%
+          <span className="text-xs text-text-secondary font-medium bg-gray-100 px-3 py-1 rounded-full flex items-center gap-1">
+            <Scale className="w-3.5 h-3.5" />
+            Peso total: {totalWeight} g
           </span>
         </h5>
+        <p className="text-xs font-bold text-text-secondary mb-5">
+          Usa utensilios de cocina para medir tus ingredientes. InviBot calcula los gramos automáticamente.
+        </p>
 
-        {/* Input Form */}
+        {/* ── Utensil selector ───────────────────────────── */}
+        <div className="mb-4">
+          <label className="block text-sm font-bold text-text-secondary mb-2">
+            Elige tu utensilio de medida:
+          </label>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {UTENSILS.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => setSelectedUtensil(u.id)}
+                className={`flex flex-col items-center p-3 rounded-2xl border-2 transition-all text-center ${
+                  selectedUtensil === u.id
+                    ? "border-primary bg-primary/10 text-heading shadow-sm"
+                    : "border-gray-200 bg-white text-text-secondary hover:border-gray-300"
+                }`}
+              >
+                <span className="text-2xl mb-1">{u.emoji}</span>
+                <span className="text-[10px] font-black leading-tight">{u.label}</span>
+                <span className="text-[9px] font-bold text-primary mt-0.5">{u.grams}g</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Input form ─────────────────────────────────── */}
         <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-4 items-end mb-6">
           <div className="flex-1 w-full">
             <label className="block text-sm font-bold text-text-secondary mb-1">
@@ -139,18 +186,37 @@ export default function RecipeBuilder({
             />
           </div>
 
-          <div className="w-full sm:w-48">
+          <div className="w-full sm:w-40">
             <label className="block text-sm font-bold text-text-secondary mb-1">
-              Cantidad: <span className="text-primary font-black">{percentage}%</span>
+              Cantidad: <span className="text-primary font-black">{quantity} {currentUtensil.emoji}</span>
             </label>
-            <input
-              type="range"
-              min="1"
-              max="100"
-              value={percentage}
-              onChange={(e) => setPercentage(Number(e.target.value))}
-              className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="w-10 h-10 rounded-xl bg-gray-100 text-heading font-black text-lg hover:bg-gray-200 transition-colors"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                className="w-16 text-center px-2 py-2 rounded-xl border-2 border-border-soft focus:border-primary focus:outline-none font-black text-heading"
+              />
+              <button
+                type="button"
+                onClick={() => setQuantity(Math.min(50, quantity + 1))}
+                className="w-10 h-10 rounded-xl bg-gray-100 text-heading font-black text-lg hover:bg-gray-200 transition-colors"
+              >
+                +
+              </button>
+            </div>
+            <span className="text-[10px] font-bold text-primary mt-1 block text-center">
+              = {quantity * currentUtensil.grams} gramos
+            </span>
           </div>
 
           <motion.button
@@ -164,45 +230,44 @@ export default function RecipeBuilder({
           </motion.button>
         </form>
 
-        {/* Status Alerts */}
+        {/* ── Status alerts ──────────────────────────────── */}
         <div className="space-y-2 mb-6">
-          {totalSum !== 100 && ingredients.length > 0 && (
-            <div className="bg-brand-pink/10 border border-brand-pink/20 text-brand-pink p-3 rounded-2xl text-sm font-bold flex flex-col sm:flex-row items-center justify-between gap-3">
-              <span>Advertencia: La suma de tus ingredientes es del {totalSum}%. ¡Debe ser exactamente el 100%!</span>
-              <button
-                type="button"
-                onClick={handleMagicalAdjust}
-                className="bg-brand-pink text-white px-4 py-1.5 rounded-full text-xs font-black flex items-center gap-1 shadow-sm cursor-pointer hover:bg-opacity-95"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>¡Ajuste Mágico!</span>
-              </button>
-            </div>
-          )}
-
           {!isOrderCorrect() && ingredients.length >= 2 && (
             <div className="bg-brand-yellow/10 border border-brand-yellow/30 text-heading p-3 rounded-2xl text-sm font-bold">
-              <span>Advertencia: ¡Espera! Los ingredientes no están ordenados de mayor a menor. Usa las flechas (subir/bajar) para organizarlos correctamente.</span>
+              ⚠️ ¡Los ingredientes deben ir de mayor a menor peso! Usa las flechas para organizarlos.
             </div>
           )}
 
-          {isOrderCorrect() && totalSum === 100 && ingredients.length >= 1 && (
+          {isOrderCorrect() && ingredients.length >= 2 && (
             <div className="bg-brand-green/10 border border-brand-green/20 text-brand-green p-3 rounded-2xl text-sm font-bold">
-              <span>Listo: la receta está lista, suma 100% y los ingredientes están ordenados correctamente.</span>
+              ✅ ¡Receta lista! Los ingredientes están ordenados correctamente. Peso total: {totalWeight}g
             </div>
           )}
         </div>
 
-        {/* Ingredients List */}
+        {/* ── Equivalences mini-table ────────────────────── */}
+        <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 mb-6">
+          <h6 className="text-xs font-black text-heading mb-2">📏 Tabla de equivalencias rápida:</h6>
+          <div className="flex flex-wrap gap-2">
+            {UTENSILS.map((u) => (
+              <span key={u.id} className="text-[10px] font-bold text-text-secondary bg-white px-2 py-1 rounded-lg border border-gray-100">
+                {u.emoji} {u.label} = {u.grams}g
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Ingredients list ────────────────────────────── */}
         <div className="space-y-3">
           <AnimatePresence initial={false}>
             {ingredients.length === 0 ? (
               <div className="text-center py-8 text-gray-300 font-bold border-2 border-dashed border-gray-100 rounded-3xl">
-                ¿Qué lleva tu receta secreta? Agrega un ingrediente arriba.
+                🍳 ¿Qué lleva tu receta secreta? Elige un utensilio y agrega ingredientes.
               </div>
             ) : (
               ingredients.map((ing, index) => {
-                const outOfOrder = isIndexOutOfOrder(index);
+                const outOfOrder = isOutOfOrder(index);
+                const u = getUtensilById(ing.utensil);
                 return (
                   <motion.div
                     key={ing.id}
@@ -221,17 +286,26 @@ export default function RecipeBuilder({
                       </span>
                       <div>
                         <h6 className="font-extrabold text-heading text-lg">{ing.name}</h6>
-                        <span className="text-sm font-bold text-text-secondary">Proporción: {ing.percentage}%</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-text-secondary">
+                            {u.emoji} {ing.quantity} {u.label}
+                          </span>
+                          <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                            {ing.totalGrams}g
+                          </span>
+                          <span className="text-xs font-bold text-text-secondary bg-gray-100 px-2 py-0.5 rounded-full">
+                            {ing.percentage}%
+                          </span>
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* Navigation buttons */}
                       <button
                         type="button"
                         disabled={index === 0}
                         onClick={() => moveIngredient(index, "up")}
-                        className="p-2 rounded-xl bg-gray-50 text-text-secondary hover:bg-primary/10 hover:text-primary disabled:opacity-30 disabled:hover:bg-gray-55"
+                        className="p-2 rounded-xl bg-gray-50 text-text-secondary hover:bg-primary/10 hover:text-primary disabled:opacity-30"
                       >
                         <ArrowUp className="w-4 h-4 stroke-[3]" />
                       </button>
@@ -239,12 +313,10 @@ export default function RecipeBuilder({
                         type="button"
                         disabled={index === ingredients.length - 1}
                         onClick={() => moveIngredient(index, "down")}
-                        className="p-2 rounded-xl bg-gray-50 text-text-secondary hover:bg-primary/10 hover:text-primary disabled:opacity-30 disabled:hover:bg-gray-55"
+                        className="p-2 rounded-xl bg-gray-50 text-text-secondary hover:bg-primary/10 hover:text-primary disabled:opacity-30"
                       >
                         <ArrowDown className="w-4 h-4 stroke-[3]" />
                       </button>
-
-                      {/* Remove button */}
                       <button
                         type="button"
                         onClick={() => handleRemove(ing.id)}
@@ -263,4 +335,3 @@ export default function RecipeBuilder({
     </div>
   );
 }
-
